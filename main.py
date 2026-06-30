@@ -1,3 +1,5 @@
+import time
+from typing import cast
 from crewai import Crew, Process
 from dotenv import load_dotenv
 
@@ -7,7 +9,6 @@ from tasks import bug_review_task, security_review_task, style_review_task, repo
 from models import FinalReport
 
 load_dotenv()
-
 
 def render_report(report: FinalReport, pr_url: str) -> str:
     """Renders the FinalReport Pydantic model into a markdown string."""
@@ -60,6 +61,12 @@ if __name__ == "__main__":
     print("\nFetching PR diff from GitHub...")
     diff = fetch_pr_diff(pr_url)
     print(f"Fetched diff for PR: {pr_url}\n")
+    print(diff)
+
+    def rate_limit_step(_step_output) -> None:
+        """Pause between agent steps to stay under API RPM limits."""
+        print("Rate limit pause: waiting 60 seconds...")
+        time.sleep(60)
 
     # Assemble the crew with all four agents and tasks
     # Process.sequential ensures the report writer runs after the three parallel reviewers
@@ -67,6 +74,7 @@ if __name__ == "__main__":
         agents=[bug_reviewer, security_reviewer, style_reviewer, report_writer],
         tasks=[bug_review_task, security_review_task, style_review_task, report_writing_task],
         process=Process.sequential,
+        step_callback=rate_limit_step,
         verbose=True
     )
 
@@ -75,7 +83,11 @@ if __name__ == "__main__":
     result = crew.kickoff(inputs={"diff": diff})
 
     # result.pydantic gives us the FinalReport from the last task (report_writing_task)
-    report: FinalReport = result.pydantic
+    # cast tells Pylance the concrete type; the runtime guard catches a missing model
+    raw = getattr(result, "pydantic", None)
+    if not isinstance(raw, FinalReport):
+        raise TypeError(f"Expected FinalReport from crew output, got {type(raw)}")
+    report: FinalReport = cast(FinalReport, raw)
 
     # Render the structured report to markdown and save to disk
     report_md = render_report(report, pr_url)

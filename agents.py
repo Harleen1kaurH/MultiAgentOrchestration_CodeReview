@@ -26,7 +26,8 @@ bug_reviewer = Agent(
     tools=[github_tool],
     allow_delegation=False,
     verbose=True,
-    llm=llm
+    llm=llm,
+    max_iter=5
 )
 
 
@@ -43,7 +44,8 @@ security_reviewer = Agent(
     tools=[web_search],
     allow_delegation=False,
     verbose=True,
-    llm=llm
+    llm=llm,
+    max_iter=5
 )
 
 
@@ -60,7 +62,8 @@ style_reviewer = Agent(
     tools=[web_search],
     allow_delegation=False,
     verbose=True,
-    llm=llm
+    llm=llm,
+    max_iter=5
 )
 
 
@@ -76,5 +79,6 @@ report_writer = Agent(
     tools=[],
     allow_delegation=False,
     verbose=True,
-    llm=llm
+    llm=llm,
+    max_iter=3
 )
