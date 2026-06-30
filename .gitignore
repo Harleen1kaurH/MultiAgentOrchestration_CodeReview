@@ -5,3 +5,6 @@
 
 #Cache folders
 __pycache__/
+
+# VS Code
+.vscode/
