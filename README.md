@@ -2,6 +2,10 @@
 
 An automated code review pipeline built with [CrewAI](https://docs.crewai.com) that takes a GitHub PR URL, fetches the diff, and runs three specialized AI agents in parallel to review for bugs, security vulnerabilities, and style issues — then synthesizes everything into a structured final report.
 
+## Demo
+<img width="988" height="768" alt="Screenshot 2026-06-30 at 11 23 16 AM" src="https://github.com/user-attachments/assets/e4c04377-bfef-4ad3-b4bf-0bef1743b2fb" />
+
+
 ## How It Works
 
 ```
