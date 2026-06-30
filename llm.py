@@ -1,6 +1,6 @@
 from crewai import LLM
 
 llm = LLM(
-    model="gemini/gemini-2.0-flash",
+    model="gemini/gemini-3.5-flash",
     temperature=0.3
 )

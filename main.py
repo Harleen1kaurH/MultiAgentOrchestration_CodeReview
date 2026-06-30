@@ -1,72 +1,84 @@
-import os
-from crewai import Agent, Task, Crew, Process
-from langchain_openai import ChatOpenAI
-from decouple import config
+from crewai import Crew, Process
+from dotenv import load_dotenv
 
-from textwrap import dedent
-from agents import CustomAgents
-from tasks import CustomTasks
+from github_fetcher import fetch_pr_diff
+from agents import bug_reviewer, security_reviewer, style_reviewer, report_writer
+from tasks import bug_review_task, security_review_task, style_review_task, report_writing_task
+from models import FinalReport
 
-# Install duckduckgo-search for this example:
-# !pip install -U duckduckgo-search
-
-from langchain.tools import DuckDuckGoSearchRun
-
-search_tool = DuckDuckGoSearchRun()
-
-os.environ["OPENAI_API_KEY"] = config("OPENAI_API_KEY")
-os.environ["OPENAI_ORGANIZATION"] = config("OPENAI_ORGANIZATION_ID")
-
-# This is the main class that you will use to define your custom crew.
-# You can define as many agents and tasks as you want in agents.py and tasks.py
+load_dotenv()
 
 
-class CustomCrew:
-    def __init__(self, var1, var2):
-        self.var1 = var1
-        self.var2 = var2
+def render_report(report: FinalReport, pr_url: str) -> str:
+    """Renders the FinalReport Pydantic model into a markdown string."""
+    return f"""# Code Review Report
 
-    def run(self):
-        # Define your custom agents and tasks in agents.py and tasks.py
-        agents = CustomAgents()
-        tasks = CustomTasks()
+**PR:** {pr_url}
 
-        # Define your custom agents and tasks here
-        custom_agent_1 = agents.agent_1_name()
-        custom_agent_2 = agents.agent_2_name()
+---
 
-        # Custom tasks include agent name and variables as input
-        custom_task_1 = tasks.task_1_name(
-            custom_agent_1,
-            self.var1,
-            self.var2,
-        )
+## Bug & Logic Review
+{report.bug_summary}
 
-        custom_task_2 = tasks.task_2_name(
-            custom_agent_2,
-        )
+---
 
-        # Define your custom crew here
-        crew = Crew(
-            agents=[custom_agent_1, custom_agent_2],
-            tasks=[custom_task_1, custom_task_2],
-            verbose=True,
-        )
+## Security Review
+{report.security_summary}
 
-        result = crew.kickoff()
-        return result
+---
+
+## Style & Best Practices Review
+{report.style_summary}
+
+---
+
+## Overall Assessment
+{report.overall_summary}
+"""
 
 
-# This is the main function that you will use to run your custom crew.
+def save_report(report_md: str, pr_url: str) -> str:
+    """Saves the markdown report to a file named after the PR number."""
+    # Extract the PR number anchored on "pull/" so trailing segments don't break it
+    parts = pr_url.strip("/").split("#")[0].split("/")
+    pull_idx = parts.index("pull")
+    pr_number = parts[pull_idx + 1]
+    filename = f"review_pr_{pr_number}.md"
+    with open(filename, "w") as f:
+        f.write(report_md)
+    return filename
+
+
 if __name__ == "__main__":
-    print("## Welcome to Crew AI Template")
-    print("-------------------------------")
-    var1 = input(dedent("""Enter variable 1: """))
-    var2 = input(dedent("""Enter variable 2: """))
+    print("## Code Review Pipeline")
+    print("-" * 40)
 
-    custom_crew = CustomCrew(var1, var2)
-    result = custom_crew.run()
-    print("\n\n########################")
-    print("## Here is you custom crew run result:")
-    print("########################\n")
-    print(result)
+    # Get the PR URL from the user
+    pr_url = input("Enter GitHub PR URL: ").strip()
+
+    # Fetch the diff from GitHub API before starting the crew
+    print("\nFetching PR diff from GitHub...")
+    diff = fetch_pr_diff(pr_url)
+    print(f"Fetched diff for PR: {pr_url}\n")
+
+    # Assemble the crew with all four agents and tasks
+    # Process.sequential ensures the report writer runs after the three parallel reviewers
+    crew = Crew(
+        agents=[bug_reviewer, security_reviewer, style_reviewer, report_writer],
+        tasks=[bug_review_task, security_review_task, style_review_task, report_writing_task],
+        process=Process.sequential,
+        verbose=True
+    )
+
+    # inputs={"diff": diff} fills in the {diff} placeholder in all three reviewer task descriptions
+    print("Starting code review crew...\n")
+    result = crew.kickoff(inputs={"diff": diff})
+
+    # result.pydantic gives us the FinalReport from the last task (report_writing_task)
+    report: FinalReport = result.pydantic
+
+    # Render the structured report to markdown and save to disk
+    report_md = render_report(report, pr_url)
+    filename = save_report(report_md, pr_url)
+
+    print(f"\nReview complete. Report saved to: {filename}")
